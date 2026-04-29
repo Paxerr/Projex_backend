@@ -9,6 +9,9 @@ namespace Projex_backend.Models
         [MaxLength(255)]
         public string Name { get; set; } = null!;
 
+        [MaxLength(50)]
+        public string? Code { get; set; }
+
         public string? Description { get; set; }
 
         public int OwnerId { get; set; }
