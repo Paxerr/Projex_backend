@@ -11,7 +11,6 @@ namespace Projex_backend.Controllers
     [ApiController]
     [Authorize]
     [Route("api/projects")]
-    [Route("api/spaces")]
     public class ProjectsController : ControllerBase
     {
         private readonly AppDbContext _db;
@@ -150,7 +149,18 @@ namespace Projex_backend.Controllers
             });
             _db.SaveChanges();
 
-            return Ok(project);
+            return Ok(new
+            {
+                project.Id,
+                project.Name,
+                project.Code,
+                project.Description,
+                project.Status,
+                project.StartDate,
+                project.EndDate,
+                project.OwnerId,
+                project.CreatedAt
+            });
         }
 
         [HttpPut("{id:int}")]

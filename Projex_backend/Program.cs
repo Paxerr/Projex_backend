@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Projex_backend.Data;
 using Projex_backend.Security;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 

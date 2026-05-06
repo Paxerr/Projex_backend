@@ -2,6 +2,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Projex_backend.Dtos
 {
+
+    public class PostProject
+    {
+
+    }
     public class PaginationQuery
     {
         [Range(1, int.MaxValue)]
