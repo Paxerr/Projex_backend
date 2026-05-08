@@ -21,7 +21,6 @@ namespace Projex_backend.Controllers
         }
 
         [HttpGet("projects/{projectId:int}/tasks")]
-        [HttpGet("spaces/{projectId:int}/tasks")]
         public IActionResult GetByProject(int projectId, [FromQuery] TaskQuery filter)
         {
             var userId = User.GetUserId();
@@ -119,7 +118,6 @@ namespace Projex_backend.Controllers
         }
 
         [HttpPost("projects/{projectId:int}/tasks")]
-        [HttpPost("spaces/{projectId:int}/tasks")]
         public IActionResult Create(int projectId, [FromBody] CreateTaskRequest request)
         {
             if (!ModelState.IsValid)
@@ -139,6 +137,20 @@ namespace Projex_backend.Controllers
                 return BadRequest(new { message = "Invalid task status." });
             }
 
+            var assigneeIds = request.AssignedUserIds.Distinct().ToList();
+            if (assigneeIds.Count > 0)
+            {
+                var memberIds = _db.ProjectMembers
+                    .Where(x => x.ProjectId == projectId && assigneeIds.Contains(x.UserId))
+                    .Select(x => x.UserId)
+                    .ToHashSet();
+
+                if (memberIds.Count != assigneeIds.Count)
+                {
+                    return BadRequest(new { message = "All assignees must belong to the project." });
+                }
+            }
+
             var task = new TaskItem
             {
                 ProjectId = projectId,
@@ -156,19 +168,8 @@ namespace Projex_backend.Controllers
             _db.Tasks.Add(task);
             _db.SaveChanges();
 
-            if (request.AssignedUserIds.Count > 0)
+            if (assigneeIds.Count > 0)
             {
-                var assigneeIds = request.AssignedUserIds.Distinct().ToList();
-                var memberIds = _db.ProjectMembers
-                    .Where(x => x.ProjectId == projectId && assigneeIds.Contains(x.UserId))
-                    .Select(x => x.UserId)
-                    .ToHashSet();
-
-                if (memberIds.Count != assigneeIds.Count)
-                {
-                    return BadRequest(new { message = "All assignees must belong to the project." });
-                }
-
                 _db.TaskAssignments.AddRange(assigneeIds.Select(x => new TaskAssignment
                 {
                     TaskId = task.Id,
@@ -191,7 +192,21 @@ namespace Projex_backend.Controllers
                 _db.SaveChanges();
             }
 
-            return Ok(task);
+            return Ok(new
+            {
+                task.Id,
+                task.ProjectId,
+                task.Title,
+                task.Description,
+                task.Status,
+                task.Priority,
+                task.DueDate,
+                task.CreatedBy,
+                task.CreatedAt,
+                task.UpdatedAt,
+                task.StatusUpdatedAt,
+                assignedUserIds = assigneeIds
+            });
         }
 
         [HttpPut("tasks/{id:int}")]
@@ -236,7 +251,20 @@ namespace Projex_backend.Controllers
 
             _db.SaveChanges();
 
-            return Ok(task);
+            return Ok(new
+            {
+                task.Id,
+                task.ProjectId,
+                task.Title,
+                task.Description,
+                task.Status,
+                task.Priority,
+                task.DueDate,
+                task.CreatedBy,
+                task.CreatedAt,
+                task.UpdatedAt,
+                task.StatusUpdatedAt
+            });
         }
 
         [HttpPatch("tasks/{id:int}/status")]
@@ -293,7 +321,15 @@ namespace Projex_backend.Controllers
                 _db.SaveChanges();
             }
 
-            return Ok(task);
+            return Ok(new
+            {
+                task.Id,
+                task.ProjectId,
+                task.Title,
+                task.Status,
+                task.StatusUpdatedAt,
+                task.UpdatedAt
+            });
         }
 
         [HttpDelete("tasks/{id:int}")]

@@ -90,7 +90,14 @@ namespace Projex_backend.Controllers
             _db.Attachments.Add(attachment);
             _db.SaveChanges();
 
-            return Ok(attachment);
+            return Ok(new
+            {
+                attachment.Id,
+                attachment.TaskId,
+                attachment.FileUrl,
+                attachment.UploadedBy,
+                attachment.UploadedAt
+            });
         }
 
         [HttpDelete("{attachmentId:int}")]

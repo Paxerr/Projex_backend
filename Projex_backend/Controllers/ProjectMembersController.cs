@@ -11,7 +11,6 @@ namespace Projex_backend.Controllers
     [ApiController]
     [Authorize]
     [Route("api/projects/{projectId:int}/members")]
-    [Route("api/spaces/{projectId:int}/members")]
     public class ProjectMembersController : ControllerBase
     {
         private readonly AppDbContext _db;
@@ -123,7 +122,13 @@ namespace Projex_backend.Controllers
             });
             _db.SaveChanges();
 
-            return Ok(member);
+            return Ok(new
+            {
+                member.UserId,
+                member.ProjectId,
+                member.Role,
+                member.JoinedAt
+            });
         }
 
         [HttpPut("{userId:int}/role")]

@@ -44,12 +44,9 @@ namespace Projex_backend.Controllers
         {
             var userId = User.GetUserId();
 
-            var tasks = _db.TaskAssignments
+            var tasks = _db.Tasks
                 .AsNoTracking()
-                .Where(x => x.UserId == userId)
-                .Select(x => x.Task)
-                .Where(x => !x.IsDeleted)
-                .Include(x => x.Project)
+                .Where(x => !x.IsDeleted && x.Assignments.Any(a => a.UserId == userId))
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(filter.Status))
@@ -87,10 +84,8 @@ namespace Projex_backend.Controllers
 
         private double CalculateOnTimeRate(int userId)
         {
-            var assignedTasks = _db.TaskAssignments
-                .Where(x => x.UserId == userId)
-                .Select(x => x.Task)
-                .Where(x => !x.IsDeleted && x.Status == "Done")
+            var assignedTasks = _db.Tasks
+                .Where(x => !x.IsDeleted && x.Status == "Done" && x.Assignments.Any(a => a.UserId == userId))
                 .ToList();
 
             if (assignedTasks.Count == 0)
