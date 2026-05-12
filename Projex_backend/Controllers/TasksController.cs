@@ -117,6 +117,60 @@ namespace Projex_backend.Controllers
             });
         }
 
+        [HttpGet("tasks/assigned")]
+        public IActionResult GetAssignedTasks([FromQuery] TaskQuery filter)
+        {
+            var currentUserId = User.GetUserId();
+
+            var accessibleProjectIds = _db.ProjectMembers
+                .Where(x => x.UserId == currentUserId)
+                .Select(x => x.ProjectId);
+
+            var tasks = _db.Tasks
+                .AsNoTracking()
+                .Include(x => x.Assignments)
+                    .ThenInclude(x => x.User)
+                .Where(x =>
+                    !x.IsDeleted &&
+                    accessibleProjectIds.Contains(x.ProjectId) &&
+                    x.Assignments.Any(a => a.UserId == currentUserId))
+                .AsQueryable();
+
+            tasks = ApplyFilters(tasks, filter);
+            tasks = ApplySorting(tasks, filter.SortBy, filter.SortOrder);
+
+            var result = tasks
+                .Select(x => new
+                {
+                    x.Id,
+                    x.ProjectId,
+                    project = new
+                    {
+                        x.Project.Id,
+                        x.Project.Name,
+                        x.Project.Code
+                    },
+                    x.Title,
+                    x.Description,
+                    x.Status,
+                    x.Priority,
+                    x.DueDate,
+                    x.CreatedBy,
+                    x.CreatedAt,
+                    x.UpdatedAt,
+                    x.StatusUpdatedAt,
+                    assignees = x.Assignments.Select(a => new
+                    {
+                        a.UserId,
+                        a.User.FullName,
+                        a.User.Email
+                    })
+                })
+                .ToPagedResult(filter.Page, filter.PageSize);
+
+            return Ok(result);
+        }
+
         [HttpPost("projects/{projectId:int}/tasks")]
         public IActionResult Create(int projectId, [FromBody] CreateTaskRequest request)
         {
