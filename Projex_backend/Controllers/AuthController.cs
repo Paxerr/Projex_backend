@@ -1,13 +1,10 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using Projex_backend.Data;
 using Projex_backend.Dtos;
 using Projex_backend.Helpers;
 using Projex_backend.Models;
+using Projex_backend.Security;
 
 namespace Projex_backend.Controllers
 {
@@ -17,11 +14,13 @@ namespace Projex_backend.Controllers
     {
         private readonly AppDbContext _db;
         private readonly IConfiguration _config;
+        private readonly IJwtService _jwtService;
 
-        public AuthController(AppDbContext db, IConfiguration config)
+        public AuthController(AppDbContext db, IConfiguration config, IJwtService jwtService)
         {
             _db = db;
             _config = config;
+            _jwtService = jwtService;
         }
 
         [HttpPost("register")]
@@ -73,7 +72,7 @@ namespace Projex_backend.Controllers
             }
 
             var expireDays = _config.GetValue<int?>("Jwt:ExpireDays") ?? 7;
-            var token = GenerateJwtToken(user, expireDays);
+            var token = _jwtService.GenerateToken(user, expireDays);
 
             return Ok(new
             {
@@ -306,28 +305,6 @@ namespace Projex_backend.Controllers
             _db.SaveChanges();
 
             return Ok(new { message = "Password reset successfully." });
-        }
-
-        private string GenerateJwtToken(User user, int expireDays)
-        {
-            var claims = new[]
-            {
-                new Claim("UserId", user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Name, user.FullName)
-            };
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddDays(expireDays),
-                signingCredentials: creds);
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         private PasswordResetToken? GetValidResetToken(string email, string code)
