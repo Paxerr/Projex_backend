@@ -131,6 +131,63 @@ namespace Projex_backend.Controllers
             });
         }
 
+        [HttpPost("by-email")]
+        public IActionResult AddMemberByEmail(int projectId, [FromBody] AddProjectMemberByEmailRequest request)
+        {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var currentUserId = User.GetUserId();
+
+            if (_db.Projects.Find(projectId) == null)
+                return NotFound(new { message = "Project not found." });
+
+            if (!CanManageProject(projectId, currentUserId))
+                return Forbid();
+
+            var userId = _db.Users
+                .Where(x => x.Email == request.Email)
+                .Select(x => x.Id)
+                .FirstOrDefault();
+
+            if (userId == 0)
+                return NotFound(new { message = "User not found." });
+
+            if (_db.ProjectMembers.Any(x => x.ProjectId == projectId && x.UserId == userId))
+                return BadRequest(new { message = "User is already a member of this project." });
+
+            var member = new ProjectMember
+            {
+                ProjectId = projectId,
+                UserId = userId,
+                Role = NormalizeRole(request.Role),
+                JoinedAt = DateTime.UtcNow
+            };
+
+            _db.ProjectMembers.Add(member);
+
+            _db.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                ProjectId = projectId,
+                TriggeredBy = currentUserId,
+                Title = "Added to project",
+                Message = $"You were added to project #{projectId} as {member.Role}.",
+                Type = "ProjectMemberAdded",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            _db.SaveChanges();
+
+            return Ok(new
+            {
+                member.UserId,
+                member.ProjectId,
+                member.Role,
+                member.JoinedAt
+            });
+        }
+
         [HttpPut("{userId:int}/role")]
         public IActionResult UpdateRole(int projectId, int userId, [FromBody] UpdateProjectMemberRoleRequest request)
         {

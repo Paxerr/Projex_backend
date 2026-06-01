@@ -7,7 +7,7 @@ namespace Projex_backend.Models
         public int Id { get; set; }
         public int UserId { get; set; }
 
-        [MaxLength(10)]
+        [MaxLength(4)]
         public string Code { get; set; } = string.Empty;
 
         public DateTime ExpiresAt { get; set; }

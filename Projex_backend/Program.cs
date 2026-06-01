@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Projex_backend.Data;
 using Projex_backend.Security;
+using Projex_backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 builder.Services
     .AddAuthentication("Bearer")

@@ -5,6 +5,7 @@ using Projex_backend.Dtos;
 using Projex_backend.Helpers;
 using Projex_backend.Models;
 using Projex_backend.Security;
+using Projex_backend.Services;
 
 namespace Projex_backend.Controllers
 {
@@ -15,12 +16,14 @@ namespace Projex_backend.Controllers
         private readonly AppDbContext _db;
         private readonly IConfiguration _config;
         private readonly IJwtService _jwtService;
+        private readonly IEmailSender _emailSender;
 
-        public AuthController(AppDbContext db, IConfiguration config, IJwtService jwtService)
+        public AuthController(AppDbContext db, IConfiguration config, IJwtService jwtService, IEmailSender emailSender)
         {
             _db = db;
             _config = config;
             _jwtService = jwtService;
+            _emailSender = emailSender;
         }
 
         [HttpPost("register")]
@@ -215,14 +218,15 @@ namespace Projex_backend.Controllers
         }
 
         [HttpPost("forgot-password")]
-        public IActionResult ForgotPassword([FromBody] ForgotPasswordRequest request)
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
             if (!ModelState.IsValid)
             {
                 return ValidationProblem(ModelState);
             }
 
-            var user = _db.Users.FirstOrDefault(x => x.Email == request.Email);
+            var email = request.Email.Trim();
+            var user = _db.Users.FirstOrDefault(x => x.Email == email);
             if (user == null)
             {
                 return NotFound(new { message = "Email does not exist." });
@@ -237,7 +241,7 @@ namespace Projex_backend.Controllers
                 token.IsUsed = true;
             }
 
-            var code = Random.Shared.Next(100000, 999999).ToString();
+            var code = Random.Shared.Next(1000, 10000).ToString();
             var resetToken = new PasswordResetToken
             {
                 UserId = user.Id,
@@ -250,10 +254,25 @@ namespace Projex_backend.Controllers
             _db.PasswordResetTokens.Add(resetToken);
             _db.SaveChanges();
 
+            try
+            {
+                await _emailSender.SendPasswordResetCodeAsync(email, code, resetToken.ExpiresAt);
+            }
+            catch (Exception ex)
+            {
+                resetToken.IsUsed = true;
+                _db.SaveChanges();
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = "Could not send reset code email.",
+                    detail = ex.Message
+                });
+            }
+
             return Ok(new
             {
-                message = "Reset code created successfully.",
-                code,
+                message = "Reset code sent to email successfully.",
                 expiresAt = resetToken.ExpiresAt
             });
         }
@@ -309,6 +328,9 @@ namespace Projex_backend.Controllers
 
         private PasswordResetToken? GetValidResetToken(string email, string code)
         {
+            email = email.Trim();
+            code = code.Trim();
+
             return _db.PasswordResetTokens
                 .Where(x =>
                     x.User.Email == email &&
