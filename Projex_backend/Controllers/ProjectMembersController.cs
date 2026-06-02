@@ -89,45 +89,88 @@ namespace Projex_backend.Controllers
                 return NotFound(new { message = "Project not found." });
             }
 
-            if (_db.Users.Find(request.UserId) == null)
+            var requestedMembers = request.Members
+                .Where(x => x.UserId > 0)
+                .GroupBy(x => x.UserId)
+                .Select(x => x.First())
+                .ToList();
+
+            if (requestedMembers.Count == 0)
             {
-                return NotFound(new { message = "User not found." });
+                return BadRequest(new { message = "Members is required." });
             }
 
-            if (_db.ProjectMembers.Any(x => x.ProjectId == projectId && x.UserId == request.UserId))
+            var requestedUserIds = requestedMembers
+                .Select(x => x.UserId)
+                .ToList();
+
+            var existingUserIds = _db.Users
+                .Where(x => requestedUserIds.Contains(x.Id))
+                .Select(x => x.Id)
+                .ToHashSet();
+
+            var missingUserIds = requestedUserIds
+                .Where(x => !existingUserIds.Contains(x))
+                .ToList();
+
+            if (missingUserIds.Count > 0)
             {
-                return BadRequest(new { message = "User is already a member of this project." });
+                return NotFound(new
+                {
+                    message = "Some users were not found.",
+                    userIds = missingUserIds
+                });
             }
 
-            var member = new ProjectMember
-            {
-                ProjectId = projectId,
-                UserId = request.UserId,
-                Role = NormalizeRole(request.Role),
-                JoinedAt = DateTime.Now
-            };
+            var alreadyMemberUserIds = _db.ProjectMembers
+                .Where(x => x.ProjectId == projectId && requestedUserIds.Contains(x.UserId))
+                .Select(x => x.UserId)
+                .ToList();
 
-            _db.ProjectMembers.Add(member);
-            _db.SaveChanges();
-
-            _db.Notifications.Add(new Notification
+            if (alreadyMemberUserIds.Count > 0)
             {
-                UserId = request.UserId,
+                return BadRequest(new
+                {
+                    message = "Some users are already members of this project.",
+                    userIds = alreadyMemberUserIds
+                });
+            }
+
+            var joinedAt = DateTime.Now;
+            var members = requestedMembers
+                .Select(x => new ProjectMember
+                {
+                    ProjectId = projectId,
+                    UserId = x.UserId,
+                    Role = NormalizeRole(x.Role),
+                    JoinedAt = joinedAt
+                })
+                .ToList();
+
+            _db.ProjectMembers.AddRange(members);
+            _db.Notifications.AddRange(members.Select(x => new Notification
+            {
+                UserId = x.UserId,
                 ProjectId = projectId,
                 TriggeredBy = currentUserId,
                 Title = "Added to project",
-                Message = $"You were added to project #{projectId} as {member.Role}.",
+                Message = $"You were added to project #{projectId} as {x.Role}.",
                 Type = "ProjectMemberAdded",
-                CreatedAt = DateTime.Now
-            });
+                CreatedAt = joinedAt
+            }));
             _db.SaveChanges();
 
             return Ok(new
             {
-                member.UserId,
-                member.ProjectId,
-                member.Role,
-                member.JoinedAt
+                message = "Members added successfully.",
+                addedCount = members.Count,
+                members = members.Select(x => new
+                {
+                    x.UserId,
+                    x.ProjectId,
+                    x.Role,
+                    x.JoinedAt
+                })
             });
         }
 
@@ -135,56 +178,117 @@ namespace Projex_backend.Controllers
         public IActionResult AddMemberByEmail(int projectId, [FromBody] AddProjectMemberByEmailRequest request)
         {
             if (!ModelState.IsValid)
+            {
                 return ValidationProblem(ModelState);
+            }
 
             var currentUserId = User.GetUserId();
 
             if (_db.Projects.Find(projectId) == null)
+            {
                 return NotFound(new { message = "Project not found." });
+            }
 
             if (!CanManageProject(projectId, currentUserId))
+            {
                 return Forbid();
+            }
 
-            var userId = _db.Users
-                .Where(x => x.Email == request.Email)
-                .Select(x => x.Id)
-                .FirstOrDefault();
+            var requestedMembers = request.Members
+                .Where(x => !string.IsNullOrWhiteSpace(x.Email))
+                .GroupBy(x => x.Email.Trim().ToLowerInvariant())
+                .Select(x => x.First())
+                .ToList();
 
-            if (userId == 0)
-                return NotFound(new { message = "User not found." });
-
-            if (_db.ProjectMembers.Any(x => x.ProjectId == projectId && x.UserId == userId))
-                return BadRequest(new { message = "User is already a member of this project." });
-
-            var member = new ProjectMember
+            if (requestedMembers.Count == 0)
             {
-                ProjectId = projectId,
-                UserId = userId,
-                Role = NormalizeRole(request.Role),
-                JoinedAt = DateTime.Now
-            };
+                return BadRequest(new { message = "Members is required." });
+            }
 
-            _db.ProjectMembers.Add(member);
+            var requestedEmails = requestedMembers
+                .Select(x => x.Email.Trim().ToLowerInvariant())
+                .ToList();
 
-            _db.Notifications.Add(new Notification
+            var users = _db.Users
+                .Where(x => requestedEmails.Contains(x.Email.ToLower()))
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Email
+                })
+                .ToList();
+
+            var usersByEmail = users.ToDictionary(x => x.Email.ToLowerInvariant(), x => x.Id);
+            var missingEmails = requestedEmails
+                .Where(x => !usersByEmail.ContainsKey(x))
+                .ToList();
+
+            if (missingEmails.Count > 0)
             {
-                UserId = userId,
+                return NotFound(new
+                {
+                    message = "Some users were not found.",
+                    emails = missingEmails
+                });
+            }
+
+            var requestedUserIds = usersByEmail.Values.ToList();
+            var alreadyMemberUserIds = _db.ProjectMembers
+                .Where(x => x.ProjectId == projectId && requestedUserIds.Contains(x.UserId))
+                .Select(x => x.UserId)
+                .ToList();
+
+            if (alreadyMemberUserIds.Count > 0)
+            {
+                var alreadyMemberEmails = users
+                    .Where(x => alreadyMemberUserIds.Contains(x.Id))
+                    .Select(x => x.Email)
+                    .ToList();
+
+                return BadRequest(new
+                {
+                    message = "Some users are already members of this project.",
+                    emails = alreadyMemberEmails
+                });
+            }
+
+            var joinedAt = DateTime.Now;
+            var members = requestedMembers
+                .Select(x => new ProjectMember
+                {
+                    ProjectId = projectId,
+                    UserId = usersByEmail[x.Email.Trim().ToLowerInvariant()],
+                    Role = NormalizeRole(x.Role),
+                    JoinedAt = joinedAt
+                })
+                .ToList();
+
+            _db.ProjectMembers.AddRange(members);
+
+            _db.Notifications.AddRange(members.Select(x => new Notification
+            {
+                UserId = x.UserId,
                 ProjectId = projectId,
                 TriggeredBy = currentUserId,
                 Title = "Added to project",
-                Message = $"You were added to project #{projectId} as {member.Role}.",
+                Message = $"You were added to project #{projectId} as {x.Role}.",
                 Type = "ProjectMemberAdded",
-                CreatedAt = DateTime.Now
-            });
+                CreatedAt = joinedAt
+            }));
 
             _db.SaveChanges();
 
             return Ok(new
             {
-                member.UserId,
-                member.ProjectId,
-                member.Role,
-                member.JoinedAt
+                message = "Members added successfully.",
+                addedCount = members.Count,
+                members = members.Select(x => new
+                {
+                    x.UserId,
+                    x.ProjectId,
+                    x.Role,
+                    x.JoinedAt
+                })
             });
         }
 

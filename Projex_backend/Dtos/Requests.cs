@@ -134,18 +134,30 @@ namespace Projex_backend.Dtos
 
     public class AddProjectMemberRequest
     {
+        [Required, MinLength(1)]
+        public List<AddProjectMemberItemRequest> Members { get; set; } = [];
+    }
+
+    public class AddProjectMemberItemRequest
+    {
         [Range(1, int.MaxValue)]
         public int UserId { get; set; }
-
+        
         [Required, MaxLength(50)]
         public string Role { get; set; } = "Member";
     }
 
     public class AddProjectMemberByEmailRequest
     {
-        [Required, MaxLength(255)]
-        public string Email { get; set; }
+        [Required, MinLength(1)]
+        public List<AddProjectMemberByEmailItemRequest> Members { get; set; } = [];
+    }
 
+    public class AddProjectMemberByEmailItemRequest
+    {
+        [Required, MaxLength(255)]
+        public string Email { get; set; } = string.Empty;
+        
         [Required, MaxLength(50)]
         public string Role { get; set; } = "Member";
     }
