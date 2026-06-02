@@ -343,9 +343,12 @@ namespace Projex_backend.Controllers
                 return Forbid();
             }
 
-            if (!CanChangeStatusTask(task.ProjectId, userId) && !CanManageProject(task.ProjectId, userId))
+            if (!CanChangeStatusTask(task.Id, userId))
             {
-                return Forbid();
+                if(!CanManageProject(task.ProjectId, userId))
+                {
+                    return Forbid();
+                }
             }
 
             if (!TaskStatusHelper.IsValid(request.Status))
@@ -491,9 +494,16 @@ namespace Projex_backend.Controllers
         }
         private bool CanChangeStatusTask(int taskId, int userId)
         {
-            bool isAssigned = _db.TaskAssignments
-            .Any(x => x.TaskId == taskId && x.UserId == userId);
-            return isAssigned;
+            var hasAssignee = _db.TaskAssignments
+                .Any(x => x.TaskId == taskId);
+
+            if (!hasAssignee)
+            {
+                return true;
+            }
+
+            return _db.TaskAssignments
+                .Any(x => x.TaskId == taskId && x.UserId == userId);
         }
     }
 }
