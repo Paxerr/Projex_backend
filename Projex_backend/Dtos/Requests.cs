@@ -211,6 +211,12 @@ namespace Projex_backend.Dtos
         public List<int> UserIds { get; set; } = [];
     }
 
+    public class ChangeAssignmentRequest
+    {
+        [Range(1, int.MaxValue)]
+        public int NewUserId { get; set; }
+    }
+
     public class UserSearchQuery : PaginationQuery
     {
         public string? Keyword { get; set; }
