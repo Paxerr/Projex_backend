@@ -214,8 +214,8 @@ namespace Projex_backend.Controllers
                 Priority = request.Priority,
                 DueDate = request.DueDate,
                 CreatedBy = userId,
-                CreatedAt = DateTime.UtcNow,
-                StatusUpdatedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.Now,
+                StatusUpdatedAt = DateTime.Now,
                 IsDeleted = false
             };
 
@@ -228,7 +228,7 @@ namespace Projex_backend.Controllers
                 {
                     TaskId = task.Id,
                     UserId = x,
-                    AssignedAt = DateTime.UtcNow
+                    AssignedAt = DateTime.Now
                 }));
                 _db.SaveChanges();
 
@@ -241,7 +241,7 @@ namespace Projex_backend.Controllers
                     Title = "New task assigned",
                     Message = $"You were assigned to task \"{task.Title}\".",
                     Type = "TaskAssigned",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }));
                 _db.SaveChanges();
             }
@@ -295,12 +295,12 @@ namespace Projex_backend.Controllers
             task.Description = request.Description?.Trim();
             task.Priority = request.Priority;
             task.DueDate = request.DueDate;
-            task.UpdatedAt = DateTime.UtcNow;
+            task.UpdatedAt = DateTime.Now;
 
             if (!string.Equals(task.Status, normalizedStatus, StringComparison.OrdinalIgnoreCase))
             {
                 task.Status = normalizedStatus;
-                task.StatusUpdatedAt = DateTime.UtcNow;
+                task.StatusUpdatedAt = DateTime.Now;
             }
 
             _db.SaveChanges();
@@ -320,6 +320,7 @@ namespace Projex_backend.Controllers
                 task.StatusUpdatedAt
             });
         }
+
 
         [HttpPatch("tasks/{id:int}/status")]
         public IActionResult UpdateStatus(int id, [FromBody] UpdateTaskStatusRequest request)
@@ -342,14 +343,19 @@ namespace Projex_backend.Controllers
                 return Forbid();
             }
 
+            if (!CanChangeStatusTask(task.ProjectId, userId) && !CanManageProject(task.ProjectId, userId))
+            {
+                return Forbid();
+            }
+
             if (!TaskStatusHelper.IsValid(request.Status))
             {
                 return BadRequest(new { message = "Invalid task status." });
             }
 
             task.Status = TaskStatusHelper.Normalize(request.Status);
-            task.StatusUpdatedAt = DateTime.UtcNow;
-            task.UpdatedAt = DateTime.UtcNow;
+            task.StatusUpdatedAt = DateTime.Now;
+            task.UpdatedAt = DateTime.Now;
 
             _db.SaveChanges();
 
@@ -370,7 +376,7 @@ namespace Projex_backend.Controllers
                     Title = "Task status updated",
                     Message = $"Task \"{task.Title}\" changed to {task.Status}.",
                     Type = "TaskStatusChanged",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }));
                 _db.SaveChanges();
             }
@@ -403,7 +409,7 @@ namespace Projex_backend.Controllers
             }
 
             task.IsDeleted = true;
-            task.UpdatedAt = DateTime.UtcNow;
+            task.UpdatedAt = DateTime.Now;
             _db.SaveChanges();
 
             return Ok(new { message = "Task deleted successfully." });
@@ -451,7 +457,7 @@ namespace Projex_backend.Controllers
 
             if (filter.IsOverdue == true)
             {
-                query = query.Where(x => x.DueDate != null && x.DueDate < DateTime.UtcNow && x.Status != "Done");
+                query = query.Where(x => x.DueDate != null && x.DueDate < DateTime.Now && x.Status != "Done");
             }
 
             return query;
@@ -482,6 +488,12 @@ namespace Projex_backend.Controllers
                 x.ProjectId == projectId &&
                 x.UserId == userId &&
                 (x.Role == "Owner" || x.Role == "Admin"));
+        }
+        private bool CanChangeStatusTask(int taskId, int userId)
+        {
+            bool isAssigned = _db.TaskAssignments
+            .Any(x => x.TaskId == taskId && x.UserId == userId);
+            return isAssigned;
         }
     }
 }

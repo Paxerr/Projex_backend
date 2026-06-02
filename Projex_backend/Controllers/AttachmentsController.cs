@@ -84,7 +84,7 @@ namespace Projex_backend.Controllers
                 TaskId = taskId,
                 FileUrl = request.FileUrl.Trim(),
                 UploadedBy = userId,
-                UploadedAt = DateTime.UtcNow
+                UploadedAt = DateTime.Now
             };
 
             _db.Attachments.Add(attachment);

@@ -108,7 +108,7 @@ namespace Projex_backend.Controllers
                 {
                     TaskId = taskId,
                     UserId = x,
-                    AssignedAt = DateTime.UtcNow
+                    AssignedAt = DateTime.Now
                 })
                 .ToList();
 
@@ -126,7 +126,7 @@ namespace Projex_backend.Controllers
                     Title = "New task assigned",
                     Message = $"You were assigned to task \"{task.Title}\".",
                     Type = "TaskAssigned",
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.Now
                 }));
                 _db.SaveChanges();
             }

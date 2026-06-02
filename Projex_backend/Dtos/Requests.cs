@@ -189,6 +189,12 @@ namespace Projex_backend.Dtos
         public List<int> AssignedUserIds { get; set; } = [];
     }
 
+    public class UpdateStatusTaskRequest
+    {
+        [Required, MaxLength(255)]
+        public string Status { get; set; }
+    }
+
     public class UpdateTaskRequest : CreateTaskRequest
     {
     }

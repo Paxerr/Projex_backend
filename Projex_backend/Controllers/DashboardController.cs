@@ -33,7 +33,7 @@ namespace Projex_backend.Controllers
                 myTasks = _db.Tasks.Count(x => myTaskIds.Contains(x.Id) && !x.IsDeleted),
                 inProgressTasks = _db.Tasks.Count(x => myTaskIds.Contains(x.Id) && !x.IsDeleted && x.Status == "InProgress"),
                 completedTasks = _db.Tasks.Count(x => myTaskIds.Contains(x.Id) && !x.IsDeleted && x.Status == "Done"),
-                overdueTasks = _db.Tasks.Count(x => myTaskIds.Contains(x.Id) && !x.IsDeleted && x.DueDate != null && x.DueDate < DateTime.UtcNow && x.Status != "Done"),
+                overdueTasks = _db.Tasks.Count(x => myTaskIds.Contains(x.Id) && !x.IsDeleted && x.DueDate != null && x.DueDate < DateTime.Now && x.Status != "Done"),
                 unreadNotifications = _db.Notifications.Count(x => x.UserId == userId && !x.IsRead),
                 onTimeRate = CalculateOnTimeRate(userId)
             });

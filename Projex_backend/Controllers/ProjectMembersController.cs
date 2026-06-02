@@ -104,7 +104,7 @@ namespace Projex_backend.Controllers
                 ProjectId = projectId,
                 UserId = request.UserId,
                 Role = NormalizeRole(request.Role),
-                JoinedAt = DateTime.UtcNow
+                JoinedAt = DateTime.Now
             };
 
             _db.ProjectMembers.Add(member);
@@ -118,7 +118,7 @@ namespace Projex_backend.Controllers
                 Title = "Added to project",
                 Message = $"You were added to project #{projectId} as {member.Role}.",
                 Type = "ProjectMemberAdded",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             });
             _db.SaveChanges();
 
@@ -161,7 +161,7 @@ namespace Projex_backend.Controllers
                 ProjectId = projectId,
                 UserId = userId,
                 Role = NormalizeRole(request.Role),
-                JoinedAt = DateTime.UtcNow
+                JoinedAt = DateTime.Now
             };
 
             _db.ProjectMembers.Add(member);
@@ -174,7 +174,7 @@ namespace Projex_backend.Controllers
                 Title = "Added to project",
                 Message = $"You were added to project #{projectId} as {member.Role}.",
                 Type = "ProjectMemberAdded",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             });
 
             _db.SaveChanges();

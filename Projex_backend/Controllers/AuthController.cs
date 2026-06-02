@@ -44,7 +44,7 @@ namespace Projex_backend.Controllers
                 Email = request.Email.Trim(),
                 FullName = request.FullName.Trim(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.Now,
                 IsActive = true
             };
 
@@ -80,7 +80,7 @@ namespace Projex_backend.Controllers
             return Ok(new
             {
                 token,
-                expiresAt = DateTime.UtcNow.AddDays(expireDays),
+                expiresAt = DateTime.Now.AddDays(expireDays),
                 user = new
                 {
                     user.Id,
@@ -141,7 +141,7 @@ namespace Projex_backend.Controllers
             user.Email = request.Email.Trim();
             user.FullName = request.FullName.Trim();
             user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
 
             _db.SaveChanges();
 
@@ -177,7 +177,7 @@ namespace Projex_backend.Controllers
             }
 
             user.AvatarUrl = request.AvatarUrl.Trim();
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
             _db.SaveChanges();
 
             return Ok(new
@@ -210,7 +210,7 @@ namespace Projex_backend.Controllers
             }
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
 
             _db.SaveChanges();
 
@@ -246,9 +246,9 @@ namespace Projex_backend.Controllers
             {
                 UserId = user.Id,
                 Code = code,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+                ExpiresAt = DateTime.Now.AddMinutes(10),
                 IsUsed = false,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _db.PasswordResetTokens.Add(resetToken);
@@ -319,7 +319,7 @@ namespace Projex_backend.Controllers
             }
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.Now;
             token.IsUsed = true;
             _db.SaveChanges();
 
@@ -336,7 +336,7 @@ namespace Projex_backend.Controllers
                     x.User.Email == email &&
                     x.Code == code &&
                     !x.IsUsed &&
-                    x.ExpiresAt >= DateTime.UtcNow)
+                    x.ExpiresAt >= DateTime.Now)
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefault();
         }

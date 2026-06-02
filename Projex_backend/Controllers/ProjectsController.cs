@@ -134,7 +134,7 @@ namespace Projex_backend.Controllers
                 Status = "Active",
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             _db.Projects.Add(project);
@@ -145,7 +145,7 @@ namespace Projex_backend.Controllers
                 ProjectId = project.Id,
                 UserId = userId,
                 Role = "Owner",
-                JoinedAt = DateTime.UtcNow
+                JoinedAt = DateTime.Now
             });
             _db.SaveChanges();
 
@@ -195,7 +195,7 @@ namespace Projex_backend.Controllers
             project.Status = request.Status.Trim();
             project.StartDate = request.StartDate;
             project.EndDate = request.EndDate;
-            project.UpdatedAt = DateTime.UtcNow;
+            project.UpdatedAt = DateTime.Now;
 
             _db.SaveChanges();
 
@@ -224,7 +224,7 @@ namespace Projex_backend.Controllers
             }
 
             project.Status = request.Status.Trim();
-            project.UpdatedAt = DateTime.UtcNow;
+            project.UpdatedAt = DateTime.Now;
 
             _db.SaveChanges();
 
