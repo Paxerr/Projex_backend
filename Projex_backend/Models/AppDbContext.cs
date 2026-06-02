@@ -15,7 +15,6 @@ namespace Projex_backend.Data
         public DbSet<ProjectMember> ProjectMembers { get; set; }
         public DbSet<TaskItem> Tasks { get; set; }
         public DbSet<TaskAssignment> TaskAssignments { get; set; }
-        public DbSet<Attachment> Attachments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
@@ -81,18 +80,6 @@ namespace Projex_backend.Data
                 .HasOne(x => x.User)
                 .WithMany(x => x.TaskAssignments)
                 .HasForeignKey(x => x.UserId)
-                .OnDelete(DeleteBehavior.NoAction);
-
-            modelBuilder.Entity<Attachment>()
-                .HasOne(x => x.Task)
-                .WithMany(x => x.Attachments)
-                .HasForeignKey(x => x.TaskId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<Attachment>()
-                .HasOne(x => x.Uploader)
-                .WithMany(x => x.Attachments)
-                .HasForeignKey(x => x.UploadedBy)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<Notification>()

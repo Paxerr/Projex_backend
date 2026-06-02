@@ -75,7 +75,6 @@ namespace Projex_backend.Controllers
                 .AsNoTracking()
                 .Include(x => x.Assignments)
                     .ThenInclude(x => x.User)
-                .Include(x => x.Attachments)
                 .FirstOrDefault(x => x.Id == id && !x.IsDeleted);
 
             if (task == null)
@@ -106,13 +105,6 @@ namespace Projex_backend.Controllers
                     a.UserId,
                     a.User.FullName,
                     a.User.Email
-                }),
-                attachments = task.Attachments.Select(a => new
-                {
-                    a.Id,
-                    a.FileUrl,
-                    a.UploadedBy,
-                    a.UploadedAt
                 })
             });
         }

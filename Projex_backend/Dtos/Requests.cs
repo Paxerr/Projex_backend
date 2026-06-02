@@ -211,12 +211,6 @@ namespace Projex_backend.Dtos
         public List<int> UserIds { get; set; } = [];
     }
 
-    public class CreateAttachmentRequest
-    {
-        [Required, MaxLength(500)]
-        public string FileUrl { get; set; } = string.Empty;
-    }
-
     public class UserSearchQuery : PaginationQuery
     {
         public string? Keyword { get; set; }
