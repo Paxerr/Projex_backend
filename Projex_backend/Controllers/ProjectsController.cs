@@ -119,21 +119,24 @@ namespace Projex_backend.Controllers
                 return ValidationProblem(ModelState);
             }
 
-            if (_db.Projects.Any(x => x.Code == request.Code))
-            {
-                return BadRequest(new { message = "Project code already exists." });
-            }
-
             var userId = User.GetUserId();
+
             var project = new Project
             {
                 Name = request.Name.Trim(),
-                Code = request.Code.Trim(),
+
                 Description = request.Description?.Trim(),
+
+                Code = $"PRJ-{DateTime.Now:yyyyMMddHHmmss}",
+
                 OwnerId = userId,
+
                 Status = "Active",
+
                 StartDate = request.StartDate,
+
                 EndDate = request.EndDate,
+
                 CreatedAt = DateTime.Now
             };
 
@@ -147,13 +150,13 @@ namespace Projex_backend.Controllers
                 Role = "Owner",
                 JoinedAt = DateTime.Now
             });
+
             _db.SaveChanges();
 
             return Ok(new
             {
                 project.Id,
                 project.Name,
-                project.Code,
                 project.Description,
                 project.Status,
                 project.StartDate,
