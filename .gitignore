@@ -1,4 +1,3 @@
-
 # Build output
 bin/
 obj/
@@ -31,6 +30,7 @@ packages/
 *.nupkg
 
 # Local secrets / environment
+appsettings.json
 appsettings.Development.json
 secrets.json
 .env
@@ -67,5 +67,4 @@ wwwroot/uploads/temp/
 wwwroot/uploads/cache/
 
 # Keep safe config templates
-!appsettings.json
 !appsettings.example.json
