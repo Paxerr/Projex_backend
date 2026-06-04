@@ -186,15 +186,30 @@ namespace Projex_backend.Controllers
 
             CÁC INTENT ĐƯỢC HỖ TRỢ:
             - my_dashboard_summary: tổng quan dashboard của người dùng hiện tại.
+            - count_my_tasks: đếm task được giao cho người dùng hiện tại.
             - count_my_overdue_tasks: đếm task bị trễ được giao cho người dùng hiện tại.
+            - count_my_tasks_by_status: đếm task của người dùng hiện tại theo trạng thái.
             - list_my_tasks: liệt kê task được giao cho người dùng hiện tại.
+            - list_my_overdue_tasks: liệt kê task bị trễ của người dùng hiện tại.
+            - list_my_tasks_by_status: liệt kê task của người dùng hiện tại theo trạng thái.
+            - list_my_upcoming_tasks: liệt kê task của người dùng hiện tại sắp đến hạn.
             - list_my_created_tasks: liệt kê task do người dùng hiện tại tạo.
             - list_my_notifications: liệt kê thông báo của người dùng hiện tại.
+            - count_my_unread_notifications: đếm thông báo chưa đọc của người dùng hiện tại.
+            - list_my_unread_notifications: liệt kê thông báo chưa đọc của người dùng hiện tại.
             - list_my_projects: liệt kê project mà người dùng hiện tại tham gia.
             - project_summary: tóm tắt một project mà người dùng có quyền truy cập theo projectId, projectCode hoặc projectName.
+            - project_task_summary: thống kê task theo trạng thái trong một project.
+            - project_overdue_summary: thống kê task trễ trong một project.
             - list_project_tasks: liệt kê task trong một project mà người dùng có quyền truy cập.
+            - list_project_overdue_tasks: liệt kê task trễ trong một project.
+            - list_project_tasks_by_status: liệt kê task trong một project theo trạng thái.
+            - list_project_upcoming_tasks: liệt kê task sắp đến hạn trong một project.
             - list_project_members: liệt kê thành viên trong một project mà người dùng có quyền truy cập.
             - managed_project_workload: thống kê workload hoặc task trễ theo thành viên, chỉ dành cho Owner/Admin của project.
+            - managed_project_overdue_by_member: thống kê task trễ theo từng thành viên, chỉ dành cho Owner/Admin.
+            - managed_project_tasks_by_member: thống kê tổng task theo từng thành viên, chỉ dành cho Owner/Admin.
+            - managed_project_completion_by_member: thống kê task hoàn thành theo từng thành viên, chỉ dành cho Owner/Admin.
 
             QUY TẮC:
             1. Chỉ trả về JSON. Không trả lời trực tiếp người dùng.
@@ -221,6 +236,10 @@ namespace Projex_backend.Controllers
                 "projectCode": null,
                 "projectName": null,
                 "status": null,
+                "keyword": null,
+                "dueWithinDays": null,
+                "memberUserId": null,
+                "memberName": null,
                 "includeOverdueOnly": false,
                 "limit": 20
               },
@@ -366,15 +385,30 @@ namespace Projex_backend.Controllers
             var supportedIntents = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 "my_dashboard_summary",
+                "count_my_tasks",
                 "count_my_overdue_tasks",
+                "count_my_tasks_by_status",
                 "list_my_tasks",
+                "list_my_overdue_tasks",
+                "list_my_tasks_by_status",
+                "list_my_upcoming_tasks",
                 "list_my_created_tasks",
                 "list_my_notifications",
+                "count_my_unread_notifications",
+                "list_my_unread_notifications",
                 "list_my_projects",
                 "project_summary",
+                "project_task_summary",
+                "project_overdue_summary",
                 "list_project_tasks",
+                "list_project_overdue_tasks",
+                "list_project_tasks_by_status",
+                "list_project_upcoming_tasks",
                 "list_project_members",
-                "managed_project_workload"
+                "managed_project_workload",
+                "managed_project_overdue_by_member",
+                "managed_project_tasks_by_member",
+                "managed_project_completion_by_member"
             };
 
             if (string.IsNullOrWhiteSpace(plan.Intent) || !supportedIntents.Contains(plan.Intent))
@@ -390,7 +424,13 @@ namespace Projex_backend.Controllers
                 return PlanValidationResult.Valid();
             }
 
-            if (plan.Intent is "project_summary" or "list_project_tasks" or "list_project_members")
+            if (plan.Intent is "list_my_tasks_by_status" or "list_project_tasks_by_status" &&
+                string.IsNullOrWhiteSpace(plan.Parameters.Status))
+            {
+                return PlanValidationResult.Invalid("Intent lọc task theo trạng thái cần có status.");
+            }
+
+            if (RequiresProjectSelector(plan.Intent))
             {
                 var hasProjectSelector =
                     plan.Parameters.ProjectId.HasValue ||
@@ -403,7 +443,7 @@ namespace Projex_backend.Controllers
                 }
             }
 
-            if (plan.Intent == "managed_project_workload")
+            if (RequiresManageRole(plan.Intent))
             {
                 var hasProjectSelector =
                     plan.Parameters.ProjectId.HasValue ||
@@ -424,20 +464,61 @@ namespace Projex_backend.Controllers
             return PlanValidationResult.Valid();
         }
 
+        private static bool RequiresProjectSelector(string intent)
+        {
+            return intent is
+                "project_summary" or
+                "project_task_summary" or
+                "project_overdue_summary" or
+                "list_project_tasks" or
+                "list_project_overdue_tasks" or
+                "list_project_tasks_by_status" or
+                "list_project_upcoming_tasks" or
+                "list_project_members" or
+                "managed_project_workload" or
+                "managed_project_overdue_by_member" or
+                "managed_project_tasks_by_member" or
+                "managed_project_completion_by_member";
+        }
+
+        private static bool RequiresManageRole(string intent)
+        {
+            return intent is
+                "managed_project_workload" or
+                "managed_project_overdue_by_member" or
+                "managed_project_tasks_by_member" or
+                "managed_project_completion_by_member";
+        }
+
         private async Task<object> ExecutePlanAsync(ChatbotQueryPlan plan, ChatbotUserContext context)
         {
             return plan.Intent switch
             {
                 "my_dashboard_summary" => await GetMyDashboardSummaryAsync(context),
+                "count_my_tasks" => await CountMyTasksAsync(context, plan.Parameters!),
                 "count_my_overdue_tasks" => await CountMyOverdueTasksAsync(context),
+                "count_my_tasks_by_status" => await CountMyTasksByStatusAsync(context),
                 "list_my_tasks" => await ListMyTasksAsync(context, plan.Parameters!),
+                "list_my_overdue_tasks" => await ListMyOverdueTasksAsync(context, plan.Parameters!),
+                "list_my_tasks_by_status" => await ListMyTasksAsync(context, plan.Parameters!),
+                "list_my_upcoming_tasks" => await ListMyUpcomingTasksAsync(context, plan.Parameters!),
                 "list_my_created_tasks" => await ListMyCreatedTasksAsync(context, plan.Parameters!),
                 "list_my_notifications" => await ListMyNotificationsAsync(context, plan.Parameters!),
+                "count_my_unread_notifications" => await CountMyUnreadNotificationsAsync(context),
+                "list_my_unread_notifications" => await ListMyUnreadNotificationsAsync(context, plan.Parameters!),
                 "list_my_projects" => await ListMyProjectsAsync(context, plan.Parameters!),
                 "project_summary" => await GetProjectSummaryAsync(context, plan.Parameters!, requireManageRole: false),
+                "project_task_summary" => await GetProjectTaskSummaryAsync(context, plan.Parameters!),
+                "project_overdue_summary" => await GetProjectOverdueSummaryAsync(context, plan.Parameters!),
                 "list_project_tasks" => await ListProjectTasksAsync(context, plan.Parameters!),
+                "list_project_overdue_tasks" => await ListProjectOverdueTasksAsync(context, plan.Parameters!),
+                "list_project_tasks_by_status" => await ListProjectTasksAsync(context, plan.Parameters!),
+                "list_project_upcoming_tasks" => await ListProjectUpcomingTasksAsync(context, plan.Parameters!),
                 "list_project_members" => await ListProjectMembersAsync(context, plan.Parameters!),
                 "managed_project_workload" => await GetManagedProjectWorkloadAsync(context, plan.Parameters!),
+                "managed_project_overdue_by_member" => await GetManagedProjectOverdueByMemberAsync(context, plan.Parameters!),
+                "managed_project_tasks_by_member" => await GetManagedProjectTasksByMemberAsync(context, plan.Parameters!),
+                "managed_project_completion_by_member" => await GetManagedProjectCompletionByMemberAsync(context, plan.Parameters!),
                 _ => throw new InvalidOperationException("Intent chatbot không được hỗ trợ.")
             };
         }
@@ -486,6 +567,39 @@ namespace Projex_backend.Controllers
             return new { overdueTaskCount = count };
         }
 
+        private async Task<object> CountMyTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var query = _db.Tasks
+                .AsNoTracking()
+                .Where(t =>
+                    !t.IsDeleted &&
+                    context.AccessibleProjectIds.Contains(t.ProjectId) &&
+                    t.Assignments.Any(a => a.UserId == context.CurrentUserId));
+
+            query = ApplyTaskPlanFilters(query, parameters);
+
+            return new { taskCount = await query.CountAsync() };
+        }
+
+        private async Task<object> CountMyTasksByStatusAsync(ChatbotUserContext context)
+        {
+            var counts = await _db.Tasks
+                .AsNoTracking()
+                .Where(t =>
+                    !t.IsDeleted &&
+                    context.AccessibleProjectIds.Contains(t.ProjectId) &&
+                    t.Assignments.Any(a => a.UserId == context.CurrentUserId))
+                .GroupBy(t => t.Status)
+                .Select(g => new
+                {
+                    Status = g.Key,
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            return new { counts };
+        }
+
         private async Task<object> ListMyTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
         {
             var query = _db.Tasks
@@ -511,6 +625,49 @@ namespace Projex_backend.Controllers
                     Project = new { t.Project.Id, t.Project.Name, t.Project.Code }
                 })
                 .ToListAsync();
+        }
+
+        private async Task<object> ListMyOverdueTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            parameters.IncludeOverdueOnly = true;
+            return await ListMyTasksAsync(context, parameters);
+        }
+
+        private async Task<object> ListMyUpcomingTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var days = Math.Clamp(parameters.DueWithinDays ?? 7, 1, 90);
+            var now = DateTime.Now;
+            var toDate = now.AddDays(days);
+
+            var query = _db.Tasks
+                .AsNoTracking()
+                .Where(t =>
+                    !t.IsDeleted &&
+                    context.AccessibleProjectIds.Contains(t.ProjectId) &&
+                    t.Assignments.Any(a => a.UserId == context.CurrentUserId) &&
+                    t.DueDate != null &&
+                    t.DueDate >= now &&
+                    t.DueDate <= toDate &&
+                    t.Status != "Done");
+
+            query = ApplyTaskPlanFilters(query, parameters);
+
+            var tasks = await query
+                .OrderBy(t => t.DueDate)
+                .ThenByDescending(t => t.Id)
+                .Take(parameters.Limit)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Title,
+                    t.Status,
+                    t.Priority,
+                    t.DueDate,
+                    Project = new { t.Project.Id, t.Project.Name, t.Project.Code }
+                })
+                .ToListAsync();
+
+            return new { DueWithinDays = days, Tasks = tasks };
         }
 
         private async Task<object> ListMyCreatedTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
@@ -560,6 +717,35 @@ namespace Projex_backend.Controllers
                 .ToListAsync();
         }
 
+        private async Task<object> CountMyUnreadNotificationsAsync(ChatbotUserContext context)
+        {
+            var count = await _db.Notifications
+                .AsNoTracking()
+                .CountAsync(x => x.UserId == context.CurrentUserId && !x.IsRead);
+
+            return new { unreadNotificationCount = count };
+        }
+
+        private async Task<object> ListMyUnreadNotificationsAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            return await _db.Notifications
+                .AsNoTracking()
+                .Where(x => x.UserId == context.CurrentUserId && !x.IsRead)
+                .OrderByDescending(x => x.CreatedAt)
+                .Take(parameters.Limit)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Title,
+                    x.Message,
+                    x.Type,
+                    x.ProjectId,
+                    x.TaskId,
+                    x.CreatedAt
+                })
+                .ToListAsync();
+        }
+
         private async Task<object> ListMyProjectsAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
         {
             return await _db.Projects
@@ -599,6 +785,43 @@ namespace Projex_backend.Controllers
             };
         }
 
+        private async Task<object> GetProjectTaskSummaryAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var project = await ResolveProjectAsync(context, parameters, requireManageRole: false);
+            var counts = await _db.Tasks
+                .AsNoTracking()
+                .Where(t => t.ProjectId == project.Id && !t.IsDeleted)
+                .GroupBy(t => t.Status)
+                .Select(g => new
+                {
+                    Status = g.Key,
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            return new
+            {
+                Project = project,
+                Counts = counts,
+                TotalTasks = counts.Sum(x => x.Count)
+            };
+        }
+
+        private async Task<object> GetProjectOverdueSummaryAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var project = await ResolveProjectAsync(context, parameters, requireManageRole: false);
+            var overdueCount = await _db.Tasks
+                .AsNoTracking()
+                .CountAsync(t =>
+                    t.ProjectId == project.Id &&
+                    !t.IsDeleted &&
+                    t.DueDate != null &&
+                    t.DueDate < DateTime.Now &&
+                    t.Status != "Done");
+
+            return new { Project = project, OverdueTaskCount = overdueCount };
+        }
+
         private async Task<object> ListProjectTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
         {
             var project = await ResolveProjectAsync(context, parameters, requireManageRole: false);
@@ -631,6 +854,55 @@ namespace Projex_backend.Controllers
                 .ToListAsync();
 
             return new { Project = project, Tasks = tasks };
+        }
+
+        private async Task<object> ListProjectOverdueTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            parameters.IncludeOverdueOnly = true;
+            return await ListProjectTasksAsync(context, parameters);
+        }
+
+        private async Task<object> ListProjectUpcomingTasksAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var project = await ResolveProjectAsync(context, parameters, requireManageRole: false);
+            var days = Math.Clamp(parameters.DueWithinDays ?? 7, 1, 90);
+            var now = DateTime.Now;
+            var toDate = now.AddDays(days);
+
+            var query = _db.Tasks
+                .AsNoTracking()
+                .Where(t =>
+                    t.ProjectId == project.Id &&
+                    !t.IsDeleted &&
+                    t.DueDate != null &&
+                    t.DueDate >= now &&
+                    t.DueDate <= toDate &&
+                    t.Status != "Done");
+
+            query = ApplyTaskPlanFilters(query, parameters);
+
+            var tasks = await query
+                .OrderBy(t => t.DueDate)
+                .ThenByDescending(t => t.Id)
+                .Take(parameters.Limit)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Title,
+                    t.Status,
+                    t.Priority,
+                    t.DueDate,
+                    t.CreatedBy,
+                    Assignees = t.Assignments.Select(a => new
+                    {
+                        a.UserId,
+                        a.User.FullName,
+                        a.User.Email
+                    })
+                })
+                .ToListAsync();
+
+            return new { Project = project, DueWithinDays = days, Tasks = tasks };
         }
 
         private async Task<object> ListProjectMembersAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
@@ -684,8 +956,97 @@ namespace Projex_backend.Controllers
             return new { Project = project, Workload = workload };
         }
 
+        private async Task<object> GetManagedProjectOverdueByMemberAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var project = await ResolveProjectAsync(context, parameters, requireManageRole: true);
+            var query = _db.TaskAssignments
+                .AsNoTracking()
+                .Where(a =>
+                    a.Task.ProjectId == project.Id &&
+                    !a.Task.IsDeleted &&
+                    a.Task.DueDate != null &&
+                    a.Task.DueDate < DateTime.Now &&
+                    a.Task.Status != "Done");
+
+            query = ApplyMemberPlanFilters(query, parameters);
+
+            var items = await query
+                .GroupBy(a => new { a.UserId, a.User.FullName, a.User.Email })
+                .Select(g => new
+                {
+                    g.Key.UserId,
+                    g.Key.FullName,
+                    g.Key.Email,
+                    OverdueTaskCount = g.Count()
+                })
+                .OrderByDescending(x => x.OverdueTaskCount)
+                .Take(parameters.Limit)
+                .ToListAsync();
+
+            return new { Project = project, Members = items };
+        }
+
+        private async Task<object> GetManagedProjectTasksByMemberAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var project = await ResolveProjectAsync(context, parameters, requireManageRole: true);
+            var query = _db.TaskAssignments
+                .AsNoTracking()
+                .Where(a => a.Task.ProjectId == project.Id && !a.Task.IsDeleted);
+
+            query = ApplyMemberPlanFilters(query, parameters);
+
+            var items = await query
+                .GroupBy(a => new { a.UserId, a.User.FullName, a.User.Email })
+                .Select(g => new
+                {
+                    g.Key.UserId,
+                    g.Key.FullName,
+                    g.Key.Email,
+                    AssignedTaskCount = g.Count()
+                })
+                .OrderByDescending(x => x.AssignedTaskCount)
+                .Take(parameters.Limit)
+                .ToListAsync();
+
+            return new { Project = project, Members = items };
+        }
+
+        private async Task<object> GetManagedProjectCompletionByMemberAsync(ChatbotUserContext context, ChatbotPlanParameters parameters)
+        {
+            var project = await ResolveProjectAsync(context, parameters, requireManageRole: true);
+            var query = _db.TaskAssignments
+                .AsNoTracking()
+                .Where(a => a.Task.ProjectId == project.Id && !a.Task.IsDeleted);
+
+            query = ApplyMemberPlanFilters(query, parameters);
+
+            var items = await query
+                .GroupBy(a => new { a.UserId, a.User.FullName, a.User.Email })
+                .Select(g => new
+                {
+                    g.Key.UserId,
+                    g.Key.FullName,
+                    g.Key.Email,
+                    DoneTaskCount = g.Count(a => a.Task.Status == "Done"),
+                    AssignedTaskCount = g.Count()
+                })
+                .OrderByDescending(x => x.DoneTaskCount)
+                .Take(parameters.Limit)
+                .ToListAsync();
+
+            return new { Project = project, Members = items };
+        }
+
         private IQueryable<Models.TaskItem> ApplyTaskPlanFilters(IQueryable<Models.TaskItem> query, ChatbotPlanParameters parameters)
         {
+            if (!string.IsNullOrWhiteSpace(parameters.Keyword))
+            {
+                var keyword = parameters.Keyword.Trim();
+                query = query.Where(t =>
+                    t.Title.Contains(keyword) ||
+                    (t.Description != null && t.Description.Contains(keyword)));
+            }
+
             if (!string.IsNullOrWhiteSpace(parameters.Status) && TaskStatusHelper.IsValid(parameters.Status))
             {
                 var status = TaskStatusHelper.Normalize(parameters.Status);
@@ -695,6 +1056,23 @@ namespace Projex_backend.Controllers
             if (parameters.IncludeOverdueOnly)
             {
                 query = query.Where(t => t.DueDate != null && t.DueDate < DateTime.Now && t.Status != "Done");
+            }
+
+            return query;
+        }
+
+        private IQueryable<Models.TaskAssignment> ApplyMemberPlanFilters(
+            IQueryable<Models.TaskAssignment> query,
+            ChatbotPlanParameters parameters)
+        {
+            if (parameters.MemberUserId.HasValue)
+            {
+                query = query.Where(a => a.UserId == parameters.MemberUserId.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(parameters.MemberName))
+            {
+                var memberName = parameters.MemberName.Trim();
+                query = query.Where(a => a.User.FullName.Contains(memberName) || a.User.Email.Contains(memberName));
             }
 
             return query;
@@ -806,15 +1184,30 @@ namespace Projex_backend.Controllers
                             @enum = new[]
                             {
                                 "my_dashboard_summary",
+                                "count_my_tasks",
                                 "count_my_overdue_tasks",
+                                "count_my_tasks_by_status",
                                 "list_my_tasks",
+                                "list_my_overdue_tasks",
+                                "list_my_tasks_by_status",
+                                "list_my_upcoming_tasks",
                                 "list_my_created_tasks",
                                 "list_my_notifications",
+                                "count_my_unread_notifications",
+                                "list_my_unread_notifications",
                                 "list_my_projects",
                                 "project_summary",
+                                "project_task_summary",
+                                "project_overdue_summary",
                                 "list_project_tasks",
+                                "list_project_overdue_tasks",
+                                "list_project_tasks_by_status",
+                                "list_project_upcoming_tasks",
                                 "list_project_members",
-                                "managed_project_workload"
+                                "managed_project_workload",
+                                "managed_project_overdue_by_member",
+                                "managed_project_tasks_by_member",
+                                "managed_project_completion_by_member"
                             }
                         },
                         riskLevel = new { type = "string", @enum = new[] { "low", "medium", "high" } },
@@ -822,13 +1215,29 @@ namespace Projex_backend.Controllers
                         {
                             type = "object",
                             additionalProperties = false,
-                            required = new[] { "projectId", "projectCode", "projectName", "status", "includeOverdueOnly", "limit" },
+                            required = new[]
+                            {
+                                "projectId",
+                                "projectCode",
+                                "projectName",
+                                "status",
+                                "keyword",
+                                "dueWithinDays",
+                                "memberUserId",
+                                "memberName",
+                                "includeOverdueOnly",
+                                "limit"
+                            },
                             properties = new
                             {
                                 projectId = new { type = new[] { "integer", "null" } },
                                 projectCode = new { type = new[] { "string", "null" } },
                                 projectName = new { type = new[] { "string", "null" } },
                                 status = new { type = new[] { "string", "null" } },
+                                keyword = new { type = new[] { "string", "null" } },
+                                dueWithinDays = new { type = new[] { "integer", "null" }, minimum = 1, maximum = 90 },
+                                memberUserId = new { type = new[] { "integer", "null" } },
+                                memberName = new { type = new[] { "string", "null" } },
                                 includeOverdueOnly = new { type = "boolean" },
                                 limit = new { type = "integer", minimum = 1, maximum = MaxLimit }
                             }
@@ -871,6 +1280,10 @@ namespace Projex_backend.Controllers
             public string? ProjectCode { get; set; }
             public string? ProjectName { get; set; }
             public string? Status { get; set; }
+            public string? Keyword { get; set; }
+            public int? DueWithinDays { get; set; }
+            public int? MemberUserId { get; set; }
+            public string? MemberName { get; set; }
             public bool IncludeOverdueOnly { get; set; }
             public int Limit { get; set; } = 20;
         }
