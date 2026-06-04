@@ -103,6 +103,7 @@ namespace Projex_backend.Dtos
     {
         [Required, MaxLength(255)]
         public string Name { get; set; } = string.Empty;
+   
 
         public string? Description { get; set; }
 
@@ -115,6 +116,9 @@ namespace Projex_backend.Dtos
     {
         [Required, MaxLength(50)]
         public string Status { get; set; } = "Active";
+
+        [Required, MaxLength(255)]
+        public string Code { get; set; } = "";
     }
 
     public class UpdateProjectStatusRequest
