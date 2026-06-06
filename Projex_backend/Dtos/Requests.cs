@@ -239,4 +239,9 @@ namespace Projex_backend.Dtos
     {
         public bool? IsRead { get; set; }
     }
+    public class UploadAvatarRequest
+    {
+        [Required]
+        public IFormFile File { get; set; } = null!;
+    }
 }

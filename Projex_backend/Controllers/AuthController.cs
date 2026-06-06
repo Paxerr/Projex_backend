@@ -160,34 +160,6 @@ namespace Projex_backend.Controllers
         }
 
         [Authorize]
-        [HttpPatch("avatar")]
-        public IActionResult UpdateAvatar([FromBody] UpdateAvatarRequest request)
-        {
-            if (!ModelState.IsValid)
-            {
-                return ValidationProblem(ModelState);
-            }
-
-            var userId = User.GetUserId();
-            var user = _db.Users.Find(userId);
-
-            if (user == null)
-            {
-                return NotFound(new { message = "User not found." });
-            }
-
-            user.AvatarUrl = request.AvatarUrl.Trim();
-            user.UpdatedAt = DateTime.Now;
-            _db.SaveChanges();
-
-            return Ok(new
-            {
-                message = "Avatar updated successfully.",
-                avatarUrl = user.AvatarUrl
-            });
-        }
-
-        [Authorize]
         [HttpPost("change-password")]
         public IActionResult ChangePassword([FromBody] ChangePasswordRequest request)
         {

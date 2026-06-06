@@ -12,10 +12,12 @@ namespace Projex_backend.Controllers
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _db;
+        private readonly IWebHostEnvironment _environment;
 
-        public UsersController(AppDbContext db)
+        public UsersController(AppDbContext db, IWebHostEnvironment environment)
         {
             _db = db;
+            _environment = environment;
         }
 
         [HttpGet("search")]
@@ -66,6 +68,73 @@ namespace Projex_backend.Controllers
                 user.AvatarUrl,
                 user.IsActive,
                 user.CreatedAt
+            });
+        }
+
+        [HttpPost("avatar/upload")]
+        [RequestSizeLimit(5 * 1024 * 1024)]
+        public async Task<IActionResult> UploadAvatar([FromForm] UploadAvatarRequest request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            var id = User.GetUserId();
+            var user = _db.Users.Find(id);
+
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found." });
+            }
+
+            var file = request.File;
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { message = "No file was uploaded." });
+            }
+
+            if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Avatar must be an image file." });
+            }
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowedExtensions = new HashSet<string> { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+
+            if (!allowedExtensions.Contains(extension))
+            {
+                return BadRequest(new { message = "Avatar file type is not supported." });
+            }
+
+            var webRootPath = _environment.WebRootPath;
+            if (string.IsNullOrWhiteSpace(webRootPath))
+            {
+                webRootPath = Path.Combine(_environment.ContentRootPath, "wwwroot");
+            }
+
+            var uploadFolder = Path.Combine(webRootPath, "uploads", "avatars");
+            Directory.CreateDirectory(uploadFolder);
+
+            var fileName = $"{user.Id}_{DateTime.Now:ddMMyyyyHHmmssfff}{extension}";
+            var filePath = Path.Combine(uploadFolder, fileName);
+
+            await using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var avatarUrl = $"{Request.Scheme}://{Request.Host}/uploads/avatars/{fileName}";
+
+            user.AvatarUrl = avatarUrl;
+            user.UpdatedAt = DateTime.Now;
+
+            _db.SaveChanges();
+
+            return Ok(new
+            {
+                message = "Upload avatar successfully.",
+                avatarUrl
             });
         }
     }
