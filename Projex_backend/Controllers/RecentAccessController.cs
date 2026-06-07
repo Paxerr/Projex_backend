@@ -53,11 +53,11 @@ namespace Projex_backend.Controllers
 
             return Ok(recentAccesses);
         }
-        public bool CanAccessTask(int taskId, int userId)
-        {
-            var hasAssignee = _db.TaskAssignments
-                .Any(x => x.TaskId == taskId);
-            return true;
-        }
+        //public bool CanAccessTask(int taskId, int userId)
+        //{
+        //    var hasAssignee = _db.TaskAssignments
+        //        .Any(x => x.TaskId == taskId);
+        //    return true;
+        //}
     }
 }
