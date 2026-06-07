@@ -34,5 +34,6 @@ namespace Projex_backend.Models
         public ICollection<TaskAssignment> TaskAssignments { get; set; } = new List<TaskAssignment>();
         public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
         public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
+        public ICollection<RecentAccesses> RecentAccesses { get; set; } = new List<RecentAccesses>();
     }
 }

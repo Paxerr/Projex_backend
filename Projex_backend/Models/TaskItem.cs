@@ -36,5 +36,7 @@ namespace Projex_backend.Models
         public Project Project { get; set; } = null!;
 
         public ICollection<TaskAssignment> Assignments { get; set; } = new List<TaskAssignment>();
+        public ICollection<RecentAccesses> RecentAccesses { get; set; } = new List<RecentAccesses>();
+
     }
 }
