@@ -42,7 +42,9 @@ namespace Projex_backend.Controllers
                     x.IsRead,
                     x.ProjectId,
                     x.TaskId,
-                    x.CreatedAt
+                    x.CreatedAt,
+                    x.TriggeredByUser.FullName,
+                    x.TriggeredByUser.AvatarUrl
                 })
                 .ToPagedResult(filter.Page, filter.PageSize);
 
