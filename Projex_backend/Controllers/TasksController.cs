@@ -109,6 +109,56 @@ namespace Projex_backend.Controllers
             });
         }
 
+        [HttpGet("tasks/assigned/GetAllTask")]
+        public IActionResult GetAllTasks()
+        {
+            var currentUserId = User.GetUserId();
+
+            var accessibleProjectIds = _db.ProjectMembers
+                .Where(pm => pm.UserId == currentUserId)
+                .Select(pm => pm.ProjectId);
+
+            var result = _db.Tasks
+                .AsNoTracking()
+                .Include(t => t.Project)
+                .Include(t => t.Assignments)
+                    .ThenInclude(a => a.User)
+                .Where(t =>
+                    !t.IsDeleted &&
+                    accessibleProjectIds.Contains(t.ProjectId))
+                .OrderByDescending(t => t.CreatedAt)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.ProjectId,
+                    project = new
+                    {
+                        t.Project.Id,
+                        t.Project.Name,
+                        t.Project.Code
+                    },
+                    t.Title,
+                    t.Description,
+                    t.Status,
+                    t.Priority,
+                    t.DueDate,
+                    t.CreatedBy,
+                    t.CreatedAt,
+                    t.UpdatedAt,
+                    t.StatusUpdatedAt,
+                    assignees = t.Assignments.Select(a => new
+                    {
+                        a.UserId,
+                        a.User.FullName,
+                        a.User.Email
+                    })
+                })
+                .ToList();
+
+            return Ok(result);
+        }
+
+
         [HttpGet("tasks/assigned")]
         public IActionResult GetAssignedTasks([FromQuery] TaskQuery filter)
         {
