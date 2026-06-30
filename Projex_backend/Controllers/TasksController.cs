@@ -20,6 +20,48 @@ namespace Projex_backend.Controllers
             _db = db;
         }
 
+
+        [HttpGet("projects/{projectId:int}/GetAllTaskByProject")]
+        public IActionResult GetByProject(int projectId)
+        {
+            var userId = User.GetUserId();
+
+            if (!CanAccessProject(projectId, userId))
+            {
+                return Forbid();
+            }
+
+            var result = _db.Tasks
+                .AsNoTracking()
+                .Include(t => t.Assignments)
+                    .ThenInclude(a => a.User)
+                .Where(t => t.ProjectId == projectId && !t.IsDeleted)
+                .OrderByDescending(t => t.CreatedAt)
+                .Select(t => new
+                {
+                    t.Id,
+                    t.ProjectId,
+                    t.Title,
+                    t.Description,
+                    t.Status,
+                    t.Priority,
+                    t.DueDate,
+                    t.CreatedBy,
+                    t.CreatedAt,
+                    t.UpdatedAt,
+                    t.StatusUpdatedAt,
+                    assignees = t.Assignments.Select(a => new
+                    {
+                        a.UserId,
+                        a.User.FullName,
+                        a.User.Email
+                    })
+                })
+                .ToList();
+
+            return Ok(result);
+        }
+
         [HttpGet("projects/{projectId:int}/tasks")]
         public IActionResult GetByProject(int projectId, [FromQuery] TaskQuery filter)
         {
