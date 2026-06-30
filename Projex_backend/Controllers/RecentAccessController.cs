@@ -29,8 +29,19 @@ namespace Projex_backend.Controllers
             RA.TaskId = taskId;
             RA.AccessAt = DateTime.Now;
 
-            _db.RecentAccesses.Add(RA);
-            _db.SaveChanges();
+            var tmp = _db.RecentAccesses.Any(x => x.UserId == userId && x.TaskId == taskId);
+
+            if (tmp)
+            {
+                var newtmp = _db.RecentAccesses.FirstOrDefault(x => x.UserId == userId && x.TaskId == taskId);
+                newtmp.AccessAt = DateTime.Now;
+                _db.SaveChanges();
+            }
+            else
+            {
+                _db.RecentAccesses.Add(RA);
+                _db.SaveChanges();
+            }
 
             return Ok(new { message = "Access recorded successfully" });
         }

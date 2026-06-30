@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Projex_backend.Data;
@@ -17,13 +19,20 @@ namespace Projex_backend.Controllers
         private readonly IConfiguration _config;
         private readonly IJwtService _jwtService;
         private readonly IEmailSender _emailSender;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public AuthController(AppDbContext db, IConfiguration config, IJwtService jwtService, IEmailSender emailSender)
+        public AuthController(
+            AppDbContext db,
+            IConfiguration config,
+            IJwtService jwtService,
+            IEmailSender emailSender,
+            IHttpClientFactory httpClientFactory)
         {
             _db = db;
             _config = config;
             _jwtService = jwtService;
             _emailSender = emailSender;
+            _httpClientFactory = httpClientFactory;
         }
 
         [HttpPost("register")]
@@ -90,6 +99,151 @@ namespace Projex_backend.Controllers
                     user.AvatarUrl
                 }
             });
+        }
+
+        [HttpGet("google")]
+        public IActionResult GoogleLogin([FromQuery(Name = "redirect_uri")] string? mobileRedirectUri)
+        {
+            return StartOAuth("Google", "https://accounts.google.com/o/oauth2/v2/auth", mobileRedirectUri, "openid email profile");
+        }
+
+        [HttpGet("github")]
+        public IActionResult GitHubLogin([FromQuery(Name = "redirect_uri")] string? mobileRedirectUri)
+        {
+            return StartOAuth("GitHub", "https://github.com/login/oauth/authorize", mobileRedirectUri, "read:user user:email");
+        }
+
+        [HttpGet("google/callback")]
+        public async Task<IActionResult> GoogleCallback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
+        {
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                return RedirectToMobile(state, ("error", error));
+            }
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return RedirectToMobile(state, ("error", "missing_code"));
+            }
+
+            var options = GetOAuthOptions("Google");
+            if (!options.IsConfigured)
+            {
+                return RedirectToMobile(state, ("error", "google_oauth_not_configured"));
+            }
+
+            var callbackUrl = BuildBackendCallbackUrl("google");
+            var http = _httpClientFactory.CreateClient();
+            var tokenResponse = await http.PostAsync("https://oauth2.googleapis.com/token", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["client_id"] = options.ClientId!,
+                ["client_secret"] = options.ClientSecret!,
+                ["code"] = code,
+                ["grant_type"] = "authorization_code",
+                ["redirect_uri"] = callbackUrl
+            }));
+
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                return RedirectToMobile(state, ("error", "google_token_exchange_failed"));
+            }
+
+            var token = await tokenResponse.Content.ReadFromJsonAsync<OAuthTokenResponse>();
+            if (string.IsNullOrWhiteSpace(token?.AccessToken))
+            {
+                return RedirectToMobile(state, ("error", "google_access_token_missing"));
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://openidconnect.googleapis.com/v1/userinfo");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+            var userInfoResponse = await http.SendAsync(request);
+            if (!userInfoResponse.IsSuccessStatusCode)
+            {
+                return RedirectToMobile(state, ("error", "google_userinfo_failed"));
+            }
+
+            var googleUser = await userInfoResponse.Content.ReadFromJsonAsync<GoogleUserInfo>();
+            if (googleUser == null || string.IsNullOrWhiteSpace(googleUser.Email))
+            {
+                return RedirectToMobile(state, ("error", "google_email_missing"));
+            }
+
+            var user = UpsertOAuthUser(googleUser.Email, googleUser.Name, googleUser.Picture);
+            return RedirectToMobileWithToken(state, user);
+        }
+
+        [HttpGet("github/callback")]
+        public async Task<IActionResult> GitHubCallback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
+        {
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                return RedirectToMobile(state, ("error", error));
+            }
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return RedirectToMobile(state, ("error", "missing_code"));
+            }
+
+            var options = GetOAuthOptions("GitHub");
+            if (!options.IsConfigured)
+            {
+                return RedirectToMobile(state, ("error", "github_oauth_not_configured"));
+            }
+
+            var callbackUrl = BuildBackendCallbackUrl("github");
+            var http = _httpClientFactory.CreateClient();
+            using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"] = options.ClientId!,
+                    ["client_secret"] = options.ClientSecret!,
+                    ["code"] = code,
+                    ["redirect_uri"] = callbackUrl
+                })
+            };
+            tokenRequest.Headers.Accept.ParseAdd("application/json");
+
+            var tokenResponse = await http.SendAsync(tokenRequest);
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                return RedirectToMobile(state, ("error", "github_token_exchange_failed"));
+            }
+
+            var token = await tokenResponse.Content.ReadFromJsonAsync<OAuthTokenResponse>();
+            if (string.IsNullOrWhiteSpace(token?.AccessToken))
+            {
+                return RedirectToMobile(state, ("error", "github_access_token_missing"));
+            }
+
+            using var userRequest = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+            userRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+            userRequest.Headers.UserAgent.ParseAdd("ProjexBackend/1.0");
+
+            var userInfoResponse = await http.SendAsync(userRequest);
+            if (!userInfoResponse.IsSuccessStatusCode)
+            {
+                return RedirectToMobile(state, ("error", "github_userinfo_failed"));
+            }
+
+            var githubUser = await userInfoResponse.Content.ReadFromJsonAsync<GitHubUserInfo>();
+            var email = githubUser?.Email;
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                email = await GetPrimaryGitHubEmail(http, token.AccessToken);
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return RedirectToMobile(state, ("error", "github_email_missing"));
+            }
+
+            var displayName = FirstNonEmpty(githubUser?.Name, githubUser?.Login, email);
+            var user = UpsertOAuthUser(email, displayName, githubUser?.AvatarUrl);
+            return RedirectToMobileWithToken(state, user);
         }
 
         [Authorize]
@@ -311,6 +465,247 @@ namespace Projex_backend.Controllers
                     x.ExpiresAt >= DateTime.Now)
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefault();
+        }
+
+        private IActionResult StartOAuth(string provider, string authorizeUrl, string? mobileRedirectUri, string scope)
+        {
+            if (!IsAllowedMobileRedirectUri(mobileRedirectUri))
+            {
+                return BadRequest(new { message = "Invalid redirect_uri." });
+            }
+
+            var options = GetOAuthOptions(provider);
+            if (!options.IsConfigured)
+            {
+                return BadRequest(new { message = $"{provider} OAuth is not configured." });
+            }
+
+            var callbackUrl = BuildBackendCallbackUrl(provider.ToLowerInvariant());
+            var state = EncodeState(mobileRedirectUri!);
+            var parameters = new Dictionary<string, string>
+            {
+                ["client_id"] = options.ClientId!,
+                ["redirect_uri"] = callbackUrl,
+                ["response_type"] = "code",
+                ["scope"] = scope,
+                ["state"] = state
+            };
+
+            if (provider.Equals("Google", StringComparison.OrdinalIgnoreCase))
+            {
+                parameters["access_type"] = "online";
+                parameters["prompt"] = "select_account";
+            }
+
+            return Redirect(BuildUrl(authorizeUrl, parameters));
+        }
+
+        private User UpsertOAuthUser(string email, string? fullName, string? avatarUrl)
+        {
+            email = email.Trim();
+            var user = _db.Users.FirstOrDefault(x => x.Email == email);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    Email = email,
+                    FullName = FirstNonEmpty(fullName, email.Split('@')[0])!,
+                    AvatarUrl = string.IsNullOrWhiteSpace(avatarUrl) ? null : avatarUrl.Trim(),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
+                    CreatedAt = DateTime.Now,
+                    IsActive = true
+                };
+
+                _db.Users.Add(user);
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(user.FullName) && !string.IsNullOrWhiteSpace(fullName))
+                {
+                    user.FullName = fullName.Trim();
+                }
+
+                if (string.IsNullOrWhiteSpace(user.AvatarUrl) && !string.IsNullOrWhiteSpace(avatarUrl))
+                {
+                    user.AvatarUrl = avatarUrl.Trim();
+                }
+
+                user.UpdatedAt = DateTime.Now;
+            }
+
+            _db.SaveChanges();
+            return user;
+        }
+
+        private IActionResult RedirectToMobileWithToken(string? state, User user)
+        {
+            if (!user.IsActive)
+            {
+                return RedirectToMobile(state, ("error", "account_inactive"));
+            }
+
+            var expireDays = _config.GetValue<int?>("Jwt:ExpireDays") ?? 7;
+            var token = _jwtService.GenerateToken(user, expireDays);
+
+            return RedirectToMobile(
+                state,
+                ("token", token),
+                ("email", user.Email),
+                ("name", user.FullName),
+                ("userId", user.Id.ToString()));
+        }
+
+        private IActionResult RedirectToMobile(string? state, params (string Key, string? Value)[] parameters)
+        {
+            var mobileRedirectUri = DecodeState(state);
+            if (!IsAllowedMobileRedirectUri(mobileRedirectUri))
+            {
+                return BadRequest(new { message = "Invalid OAuth state." });
+            }
+
+            return Redirect(BuildUrl(mobileRedirectUri!, parameters
+                .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+                .ToDictionary(x => x.Key, x => x.Value!)));
+        }
+
+        private async Task<string?> GetPrimaryGitHubEmail(HttpClient http, string accessToken)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user/emails");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+            request.Headers.UserAgent.ParseAdd("ProjexBackend/1.0");
+
+            var response = await http.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var emails = await response.Content.ReadFromJsonAsync<List<GitHubEmailInfo>>();
+            return emails?
+                .Where(x => x.Verified)
+                .OrderByDescending(x => x.Primary)
+                .Select(x => x.Email)
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+        }
+
+        private OAuthOptions GetOAuthOptions(string provider)
+        {
+            return new OAuthOptions
+            {
+                ClientId = _config[$"OAuth:{provider}:ClientId"],
+                ClientSecret = _config[$"OAuth:{provider}:ClientSecret"]
+            };
+        }
+
+        private string BuildBackendCallbackUrl(string provider)
+        {
+            var baseUrl = _config["OAuth:BackendBaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = $"{Request.Scheme}://{Request.Host}";
+            }
+
+            return $"{baseUrl.TrimEnd('/')}/api/auth/{provider}/callback";
+        }
+
+        private static bool IsAllowedMobileRedirectUri(string? redirectUri)
+        {
+            return Uri.TryCreate(redirectUri, UriKind.Absolute, out var uri)
+                   && uri.Scheme == "projex"
+                   && uri.Host == "auth"
+                   && uri.AbsolutePath == "/callback";
+        }
+
+        private static string EncodeState(string mobileRedirectUri)
+        {
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(mobileRedirectUri));
+        }
+
+        private static string? DecodeState(string? state)
+        {
+            if (string.IsNullOrWhiteSpace(state))
+            {
+                return null;
+            }
+
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(state));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string BuildUrl(string baseUrl, IReadOnlyDictionary<string, string> parameters)
+        {
+            var query = string.Join("&", parameters.Select(x =>
+                $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(x.Value)}"));
+
+            return baseUrl.Contains('?') ? $"{baseUrl}&{query}" : $"{baseUrl}?{query}";
+        }
+
+        private static string? FirstNonEmpty(params string?[] values)
+        {
+            return values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim();
+        }
+
+        private sealed class OAuthOptions
+        {
+            public string? ClientId { get; init; }
+            public string? ClientSecret { get; init; }
+            public bool IsConfigured =>
+                !string.IsNullOrWhiteSpace(ClientId)
+                && !string.IsNullOrWhiteSpace(ClientSecret)
+                && !ClientId.Contains("YOUR_", StringComparison.OrdinalIgnoreCase)
+                && !ClientSecret.Contains("YOUR_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private sealed class OAuthTokenResponse
+        {
+            [JsonPropertyName("access_token")]
+            public string? AccessToken { get; init; }
+        }
+
+        private sealed class GoogleUserInfo
+        {
+            [JsonPropertyName("email")]
+            public string? Email { get; init; }
+
+            [JsonPropertyName("name")]
+            public string? Name { get; init; }
+
+            [JsonPropertyName("picture")]
+            public string? Picture { get; init; }
+        }
+
+        private sealed class GitHubUserInfo
+        {
+            [JsonPropertyName("login")]
+            public string? Login { get; init; }
+
+            [JsonPropertyName("name")]
+            public string? Name { get; init; }
+
+            [JsonPropertyName("email")]
+            public string? Email { get; init; }
+
+            [JsonPropertyName("avatar_url")]
+            public string? AvatarUrl { get; init; }
+        }
+
+        private sealed class GitHubEmailInfo
+        {
+            [JsonPropertyName("email")]
+            public string? Email { get; init; }
+
+            [JsonPropertyName("primary")]
+            public bool Primary { get; init; }
+
+            [JsonPropertyName("verified")]
+            public bool Verified { get; init; }
         }
     }
 }

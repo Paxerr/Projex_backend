@@ -88,7 +88,7 @@ namespace Projex_backend.Controllers
                 return NotFound(new { message = "User not found." });
             }
 
-            var file = request.File;
+            var file = request.File ?? Request.Form.Files.FirstOrDefault();
             if (file == null || file.Length == 0)
             {
                 return BadRequest(new { message = "No file was uploaded." });
